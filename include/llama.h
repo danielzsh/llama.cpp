@@ -1165,6 +1165,8 @@ extern "C" {
 
 extern int64_t kqv_time;
 extern int64_t ffn_time;
+extern int64_t decode_time;
+extern int64_t kqv_calls;
 
 // Internal API to be implemented by llama.cpp and used by tests/benchmarks only
 #ifdef LLAMA_API_INTERNAL

@@ -131,7 +131,9 @@ static void llama_log_callback_default(ggml_log_level level, const char * text, 
 // helpers
 //
 
+int64_t decode_time = 0;
 int64_t kqv_time = 0;
+int64_t kqv_calls = 0;
 int64_t ffn_time = 0;
 
 static size_t utf8_len(char src) {
@@ -8199,7 +8201,6 @@ static struct ggml_tensor * llm_build_kqv(
                     float     kq_scale,
          const llm_build_cb & cb,
                     int       il) {
-    int64_t t = ggml_time_us();
     const llama_model   & model   = lctx.model;
     const llama_hparams & hparams = lctx.model.hparams;
     const llama_cparams & cparams = lctx.cparams;
@@ -8313,7 +8314,6 @@ static struct ggml_tensor * llm_build_kqv(
         cur = ggml_add(ctx, cur, wo_b);
     }
 
-    kqv_time += ggml_time_us() - t;
     return cur;
 }
 
@@ -8337,6 +8337,8 @@ static struct ggml_tensor * llm_build_kv(
     const llama_hparams & hparams = lctx.model.hparams;
     const llama_cparams & cparams = lctx.cparams;
 
+    ++kqv_calls;
+    int64_t t = ggml_time_us();
     // these nodes are added to the graph together so that they are not reordered
     // by doing so, the number of splits in the graph is reduced
     ggml_build_forward_expand(graph, q_cur);
@@ -8351,6 +8353,7 @@ static struct ggml_tensor * llm_build_kv(
             q_cur, kq_mask, n_tokens, n_kv, kq_scale, cb, il);
     cb(cur, "kqv_out", il);
 
+    kqv_time += ggml_time_us() - t;
     return cur;
 }
 
@@ -14486,6 +14489,7 @@ static int llama_decode_internal(
          llama_context & lctx,
            llama_batch   batch_all) { // TODO: rename back to batch
 
+    int64_t t = ggml_time_us();
     lctx.is_encoding = false;
     const uint32_t n_tokens_all = batch_all.n_tokens;
 
@@ -14780,6 +14784,8 @@ static int llama_decode_internal(
     // Reset state for the next token before backend sync, to allow the CPU activities in the reset to
     // overlap with device computation.
     ggml_backend_sched_reset(lctx.sched);
+
+    decode_time += ggml_time_us() - t;
 
     return 0;
 }
