@@ -162,6 +162,7 @@ int main(int argc, char ** argv) {
             __func__, n_decode, (t_main_end - t_main_start) / 1000000.0f, n_decode / ((t_main_end - t_main_start) / 1000000.0f));
     LOG_TEE("%ld # of times kqv was called\n", kqv_calls);
     LOG_TEE("%ld decode time\n", decode_time);
+    LOG_TEE("%ld compute time\n", compute_time);
     LOG_TEE("%ld microseconds time spent on kqv\n", kqv_time);
     LOG_TEE("%ld microseconds spent on ffn\n", ffn_time);
 

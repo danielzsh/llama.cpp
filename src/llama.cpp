@@ -1,5 +1,6 @@
 #define LLAMA_API_INTERNAL
 #include "llama.h"
+#include "log.h"
 
 #include "unicode.h"
 
@@ -133,6 +134,7 @@ static void llama_log_callback_default(ggml_log_level level, const char * text, 
 
 int64_t decode_time = 0;
 int64_t kqv_time = 0;
+int64_t compute_time = 0;
 int64_t kqv_calls = 0;
 int64_t ffn_time = 0;
 
@@ -13732,7 +13734,7 @@ static struct ggml_cgraph * llama_build_graph_defrag(llama_context & lctx, const
     llama_batch dummy;
     dummy.n_tokens = 0;
 
-    llm_build_cb cb = [&](struct ggml_tensor * , const char * , int ) { };
+    llm_build_cb cb = [&](struct ggml_tensor * , const char * s, int ) { LOG_TEE("defrag %s\n", s); };
 
     struct llm_build_context llm(lctx, dummy, cb, false);
 
@@ -13749,7 +13751,7 @@ static struct ggml_cgraph * llama_build_graph_k_shift(llama_context & lctx) {
     llama_batch dummy;
     dummy.n_tokens = 0;
 
-    llm_build_cb cb = [&](struct ggml_tensor * , const char * , int ) { };
+    llm_build_cb cb = [&](struct ggml_tensor * , const char * s, int ) { LOG_TEE("kshift %s\n", s); };
 
     struct llm_build_context llm(lctx, dummy, cb, false);
 
@@ -13766,7 +13768,7 @@ static struct ggml_cgraph * llama_build_graph_s_copy(llama_context & lctx) {
     llama_batch dummy;
     dummy.n_tokens = 0;
 
-    llm_build_cb cb = [&](struct ggml_tensor * , const char * , int ) { };
+    llm_build_cb cb = [&](struct ggml_tensor * , const char * , int ) { printf("copy\n"); };
 
     struct llm_build_context llm(lctx, dummy, cb, false);
 
@@ -14685,7 +14687,9 @@ static int llama_decode_internal(
 
         llama_set_inputs(lctx, u_batch);
 
+        int64_t t = ggml_time_us();
         llama_graph_compute(lctx, gf, n_threads);
+        compute_time += ggml_time_us() - t;
 
         // update the kv ring buffer
         {

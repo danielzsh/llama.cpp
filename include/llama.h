@@ -1164,6 +1164,7 @@ extern "C" {
 #endif
 
 extern int64_t kqv_time;
+extern int64_t compute_time;
 extern int64_t ffn_time;
 extern int64_t decode_time;
 extern int64_t kqv_calls;
