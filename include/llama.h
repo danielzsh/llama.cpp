@@ -1163,6 +1163,9 @@ extern "C" {
 }
 #endif
 
+extern int64_t kqv_time;
+extern int64_t ffn_time;
+
 // Internal API to be implemented by llama.cpp and used by tests/benchmarks only
 #ifdef LLAMA_API_INTERNAL
 
@@ -1171,6 +1174,7 @@ extern "C" {
 #include <vector>
 
 struct ggml_tensor;
+
 
 struct llama_partial_utf8 {
     uint32_t value;    // bit value so far (unshifted)

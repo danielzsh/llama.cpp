@@ -131,6 +131,9 @@ static void llama_log_callback_default(ggml_log_level level, const char * text, 
 // helpers
 //
 
+int64_t kqv_time = 0;
+int64_t ffn_time = 0;
+
 static size_t utf8_len(char src) {
     const size_t lookup[] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 3, 4 };
     uint8_t highbits = static_cast<uint8_t>(src) >> 4;
@@ -489,6 +492,8 @@ struct LLM_KV {
         return ::format(LLM_KV_NAMES.at(kv), LLM_ARCH_NAMES.at(arch));
     }
 };
+
+// long kqv_time = 0;
 
 enum llm_tensor {
     LLM_TENSOR_TOKEN_EMBD,
@@ -8092,6 +8097,7 @@ static struct ggml_tensor * llm_build_moe_ffn(
                       float   w_scale,
          const llm_build_cb & cb,
                         int   il) {
+    int64_t t = ggml_time_us();
     int64_t n_embd = cur->ne[0];
     int64_t n_tokens = cur->ne[1];
 
@@ -8174,6 +8180,8 @@ static struct ggml_tensor * llm_build_moe_ffn(
         moe_out = ggml_cont(ctx, moe_out);
     }
 
+    ffn_time += ggml_time_us() - t;
+
     return moe_out;
 }
 
@@ -8191,6 +8199,7 @@ static struct ggml_tensor * llm_build_kqv(
                     float     kq_scale,
          const llm_build_cb & cb,
                     int       il) {
+    int64_t t = ggml_time_us();
     const llama_model   & model   = lctx.model;
     const llama_hparams & hparams = lctx.model.hparams;
     const llama_cparams & cparams = lctx.cparams;
@@ -8304,6 +8313,7 @@ static struct ggml_tensor * llm_build_kqv(
         cur = ggml_add(ctx, cur, wo_b);
     }
 
+    kqv_time += ggml_time_us() - t;
     return cur;
 }
 

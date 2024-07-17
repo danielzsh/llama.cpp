@@ -1,4 +1,5 @@
 #include "common.h"
+#define LLAMA_API_INTERNAL
 #include "llama.h"
 
 #include <cmath>
@@ -159,6 +160,8 @@ int main(int argc, char ** argv) {
 
     LOG_TEE("%s: decoded %d tokens in %.2f s, speed: %.2f t/s\n",
             __func__, n_decode, (t_main_end - t_main_start) / 1000000.0f, n_decode / ((t_main_end - t_main_start) / 1000000.0f));
+    LOG_TEE("%ld microseconds time spent on kqv\n", kqv_time);
+    LOG_TEE("%ld microseconds spent on ffn\n", ffn_time);
 
     llama_print_timings(ctx);
 
