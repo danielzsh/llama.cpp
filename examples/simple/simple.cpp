@@ -1,6 +1,7 @@
 #include "common.h"
 #define LLAMA_API_INTERNAL
 #include "llama.h"
+#include "benchmarks.h"
 
 #include <cmath>
 #include <cstdio>
@@ -163,8 +164,10 @@ int main(int argc, char ** argv) {
     LOG_TEE("%ld # of times kqv was called\n", kqv_calls);
     LOG_TEE("%ld decode time\n", decode_time);
     LOG_TEE("%ld compute time\n", compute_time);
-    LOG_TEE("%ld microseconds time spent on kqv\n", kqv_time);
+    LOG_TEE("%ld matmul time\n", mm_time);
+    LOG_TEE("%ld microseconds time spent building kqv\n", kqv_time);
     LOG_TEE("%ld microseconds spent on ffn\n", ffn_time);
+    for (int i = 0; i < 75; i++) printf("%d: %ld\n", i, t[i]);
 
     llama_print_timings(ctx);
 

@@ -1,0 +1,7 @@
+/home/ubuntu/llama.cpp/examples/gguf-split/CMakeFiles/llama-gguf-split.dir
+/home/ubuntu/llama.cpp/examples/gguf-split/CMakeFiles/edit_cache.dir
+/home/ubuntu/llama.cpp/examples/gguf-split/CMakeFiles/rebuild_cache.dir
+/home/ubuntu/llama.cpp/examples/gguf-split/CMakeFiles/list_install_components.dir
+/home/ubuntu/llama.cpp/examples/gguf-split/CMakeFiles/install.dir
+/home/ubuntu/llama.cpp/examples/gguf-split/CMakeFiles/install/local.dir
+/home/ubuntu/llama.cpp/examples/gguf-split/CMakeFiles/install/strip.dir

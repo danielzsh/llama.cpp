@@ -5,6 +5,7 @@
 #include "ggml-quants.h"
 #include "ggml.h"
 #include "ggml-aarch64.h"
+#include "benchmarks.h"
 
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #include <malloc.h> // using malloc.h with MSC/MINGW
@@ -10154,10 +10155,13 @@ static void ggml_compute_forward_mul_f32(
     }
 }
 
+int64_t mm_time = 0;
+
 static void ggml_compute_forward_mul(
         const struct ggml_compute_params * params,
         struct ggml_tensor * dst) {
 
+    int64_t t = ggml_time_us();
     const struct ggml_tensor * src0 = dst->src[0];
     const struct ggml_tensor * src1 = dst->src[1];
 
@@ -10173,6 +10177,7 @@ static void ggml_compute_forward_mul(
                 GGML_ASSERT(false);
             } break;
     }
+    mm_time += ggml_time_us() - t;
 }
 
 // ggml_compute_forward_div
@@ -16626,12 +16631,16 @@ static void ggml_compute_forward_cross_entropy_loss_back(
 
 /////////////////////////////////
 
+int64_t t[75] = {};
+
 static void ggml_compute_forward(struct ggml_compute_params * params, struct ggml_tensor * tensor) {
     GGML_ASSERT(params);
 
     if (tensor->op == GGML_OP_NONE || ggml_is_empty(tensor)) {
         return;
     }
+
+    int64_t tt = ggml_time_us();
 
     switch (tensor->op) {
         case GGML_OP_DUP:
@@ -16958,6 +16967,7 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
                 GGML_ASSERT(false);
             } break;
     }
+    t[tensor->op] += ggml_time_us() - tt;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
