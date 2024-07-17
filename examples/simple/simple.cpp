@@ -7,6 +7,8 @@
 #include <cstdio>
 #include <string>
 #include <vector>
+#include <map>
+#include <iostream>
 
 static void print_usage(int argc, char ** argv, const gpt_params & params) {
     gpt_params_print_usage(argc, argv, params);
@@ -167,7 +169,17 @@ int main(int argc, char ** argv) {
     LOG_TEE("%ld matmul time\n", mm_time);
     LOG_TEE("%ld microseconds time spent building kqv\n", kqv_time);
     LOG_TEE("%ld microseconds spent on ffn\n", ffn_time);
-    for (int i = 0; i < 75; i++) printf("%d: %ld\n", i, t[i]);
+    // for (int i = 0; i < 75; i++) printf("%d: %ld\n", i, t[i]);
+    std::map<std::string, int64_t> rt;
+    printf("%ld\n", sz);
+    for (int i = 0; i < 20; i++) printf("%s\n", s[i]);
+    for (int i = 0; i < sz; i++) if (s[i]) {
+        std::string S(s[i]);
+        rt[S.substr(0, S.find("-"))] += t[i];
+    }
+    for (auto p : rt) {
+        std::cout << p.first << ": " << p.second << std::endl;
+    }
 
     llama_print_timings(ctx);
 

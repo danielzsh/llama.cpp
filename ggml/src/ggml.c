@@ -16631,7 +16631,11 @@ static void ggml_compute_forward_cross_entropy_loss_back(
 
 /////////////////////////////////
 
-int64_t t[75] = {};
+size_t sz = 0;
+const char *s[200000];
+int64_t t[200000];
+
+
 
 static void ggml_compute_forward(struct ggml_compute_params * params, struct ggml_tensor * tensor) {
     GGML_ASSERT(params);
@@ -16967,7 +16971,13 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
                 GGML_ASSERT(false);
             } break;
     }
-    t[tensor->op] += ggml_time_us() - tt;
+    s[sz] = tensor->name;
+    t[sz++] = ggml_time_us() - tt;
+    // ++temp;
+    // printf("%s\n", tensor->name);
+    // std::string s(tensor->name);
+    // rt[s.substr(0, s.find("-"))] += ggml_time_us() - tt;
+    // if (strcmp(tensor->name, "kq") == 0) t[tensor->op] += ggml_time_us() - tt;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
