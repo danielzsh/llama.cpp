@@ -16633,8 +16633,8 @@ static void ggml_compute_forward_cross_entropy_loss_back(
 
 size_t sz = 0;
 const char *s[200000];
-int64_t t[200000];
-
+int64_t l[200000];
+int64_t r[200000];
 
 
 static void ggml_compute_forward(struct ggml_compute_params * params, struct ggml_tensor * tensor) {
@@ -16971,8 +16971,9 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
                 GGML_ASSERT(false);
             } break;
     }
-    s[sz] = tensor->name;
-    t[sz++] = ggml_time_us() - tt;
+    l[sz] = tt;
+    r[sz] = ggml_time_us();
+    s[sz++] = tensor->name;
     // ++temp;
     // printf("%s\n", tensor->name);
     // std::string s(tensor->name);

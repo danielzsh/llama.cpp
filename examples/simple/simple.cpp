@@ -23,6 +23,7 @@ int main(int argc, char ** argv) {
 
     params.prompt = "Hello my name is";
     params.n_predict = 32;
+    // params.n_threads = 1;
 
     if (!gpt_params_parse(argc, argv, params)) {
         print_usage(argc, argv, params);
@@ -171,15 +172,18 @@ int main(int argc, char ** argv) {
     LOG_TEE("%ld microseconds spent on ffn\n", ffn_time);
     // for (int i = 0; i < 75; i++) printf("%d: %ld\n", i, t[i]);
     std::map<std::string, int64_t> rt;
+    int64_t tot = 0;
     printf("%ld\n", sz);
     for (int i = 0; i < 20; i++) printf("%s\n", s[i]);
     for (int i = 0; i < sz; i++) if (s[i]) {
         std::string S(s[i]);
-        rt[S.substr(0, S.find("-"))] += t[i];
+        rt[S.substr(0, S.find("-"))] += r[i] - l[i];
+        tot += r[i] - l[i];
     }
     for (auto p : rt) {
         std::cout << p.first << ": " << p.second << std::endl;
     }
+    printf("%ld total time\n", tot);
 
     llama_print_timings(ctx);
 
