@@ -187,8 +187,9 @@ int main(int argc, char ** argv) {
         }
         tot += r[i] - l[i];
     }
-    printf("%d repetitive things avoided\n", tot_tokens);
+    printf("%d repetitive k_cur computation of key avoided\n", tot_tokens);
     printf("%f average time spent on Kcur\n", kqv / c);
+    printf("%d total k_cur computations\n", c); 
     std::vector<std::pair<std::string, int64_t>> v;
     for (auto p : rt) {
         // std::cout << p.first << ": " << p.second << std::endl;
