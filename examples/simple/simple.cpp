@@ -173,14 +173,31 @@ int main(int argc, char ** argv) {
     // for (int i = 0; i < 75; i++) printf("%d: %ld\n", i, t[i]);
     std::map<std::string, int64_t> rt;
     int64_t tot = 0;
+    double kqv = 0;
     printf("%ld\n", sz);
     for (int i = 0; i < 20; i++) printf("%s\n", s[i]);
+    int c = 0;
     for (int i = 0; i < sz; i++) if (s[i]) {
         std::string S(s[i]);
         rt[S.substr(0, S.find("-"))] += r[i] - l[i];
+
+        if (S.substr(0, S.find("-")) == "Kcur") {
+            kqv += r[i] - l[i];
+            ++c;
+        }
         tot += r[i] - l[i];
     }
+    printf("%d repetitive things avoided\n", tot_tokens);
+    printf("%f average time spent on Kcur\n", kqv / c);
+    std::vector<std::pair<std::string, int64_t>> v;
     for (auto p : rt) {
+        // std::cout << p.first << ": " << p.second << std::endl;
+        v.push_back(p);
+    }
+    sort(v.begin(), v.end(), [](std::pair<std::string, int64_t> a, std::pair<std::string, int64_t> b) {
+        return a.second > b.second;
+    });
+    for (auto p : v) {
         std::cout << p.first << ": " << p.second << std::endl;
     }
     printf("%ld total time\n", tot);

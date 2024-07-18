@@ -3,6 +3,7 @@
 #include "log.h"
 
 #include "unicode.h"
+#include "benchmarks.h"
 
 #include "ggml.h"
 #include "ggml-alloc.h"
@@ -7828,6 +7829,8 @@ static struct ggml_tensor * llm_build_inp_embd(
     return inpL;
 }
 
+int64_t tot_tokens = 0;
+
 static void llm_build_kv_store(
         struct ggml_context * ctx,
         const llama_hparams & hparams,
@@ -7854,6 +7857,8 @@ static void llm_build_kv_store(
     // note: storing RoPE-ed version of K in the KV cache
     ggml_build_forward_expand(graph, ggml_cpy(ctx, k_cur, k_cache_view));
 
+    tot_tokens += n_tokens - 1;
+    // printf("%d\n", n_tokens);
     assert(v_cur->ne[0] == n_embd_v_gqa && v_cur->ne[1] == n_tokens);
 
     struct ggml_tensor * v_cache_view = nullptr;
@@ -8339,8 +8344,6 @@ static struct ggml_tensor * llm_build_kv(
     const llama_hparams & hparams = lctx.model.hparams;
     const llama_cparams & cparams = lctx.cparams;
 
-    ++kqv_calls;
-    int64_t t = ggml_time_us();
     // these nodes are added to the graph together so that they are not reordered
     // by doing so, the number of splits in the graph is reduced
     ggml_build_forward_expand(graph, q_cur);
@@ -8355,7 +8358,6 @@ static struct ggml_tensor * llm_build_kv(
             q_cur, kq_mask, n_tokens, n_kv, kq_scale, cb, il);
     cb(cur, "kqv_out", il);
 
-    kqv_time += ggml_time_us() - t;
     return cur;
 }
 
