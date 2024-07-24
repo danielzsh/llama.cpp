@@ -42,7 +42,7 @@ int main(int argc, char ** argv) {
 
     llama_model_params model_params = llama_model_params_from_gpt_params(params);
 
-    llama_model * model = llama_load_model_from_file(params.model.c_str(), model_params);
+    llama_model * model = llama_load_model_from_file("llama-2-7b.Q8_0.gguf", model_params);
 
     if (model == NULL) {
         fprintf(stderr , "%s: error: unable to load model\n" , __func__);
@@ -126,10 +126,33 @@ int main(int argc, char ** argv) {
             }
 
             llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
+            
+            // double max_p = INFINITY;
+            // if (n_cur == n_predict) printf("finished printing logits\n");
+            // softmax: probability = e^logit / sum(e^logit)
+            // nll: -ln(probability)
+            // nll(softmax(logit)) = ln(sum(e^logit)) - logit
+            // uncertaintly = maximum nll
+            // probability = 1 means that nll = 0, hence why high uncertainty is bad 
+            // calculate uncertainty 
+            float sum_exp = 0, min_logit = INFINITY;
+            for (int i = 0; i < candidates_p.size; i++) {
+                // max_p = std::min(max_p, -log2(candidates_p.data[i].p));
+                sum_exp += exp(candidates_p.data[i].logit);
+                min_logit = std::min(min_logit, candidates_p.data[i].logit);
+            }
 
+            float uncertainty = log(sum_exp) - min_logit;
+            printf("\nuncertainty: %f\n", uncertainty);
+            
+            
             // sample the most likely token
             const llama_token new_token_id = llama_sample_token_greedy(ctx, &candidates_p);
-
+             
+            //negative log likelihood (NLL) confidence score
+            
+            // Confidence(Pi) = NLL(t1)
+            
             // is it an end of generation?
             if (llama_token_is_eog(model, new_token_id) || n_cur == n_predict) {
                 LOG_TEE("\n");
@@ -202,6 +225,7 @@ int main(int argc, char ** argv) {
         std::cout << p.first << ": " << p.second << std::endl;
     }
     printf("%ld total time\n", tot);
+    printf("%f total time without kv_cache\n", tot + kqv / c * tot_tokens);
 
     llama_print_timings(ctx);
 

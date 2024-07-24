@@ -1,0 +1,1 @@
+./llama-simple -m llama-2-7b.Q8_0.gguf
