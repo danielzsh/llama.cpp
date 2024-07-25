@@ -1,7 +1,5 @@
 #include "common.h"
-#define LLAMA_API_INTERNAL
 #include "llama.h"
-#include "benchmarks.h"
 
 #include <cmath>
 #include <cstdio>
@@ -81,6 +79,7 @@ end for
 
 return x_1, ..., x_T
 */
+
 int main(int argc, char ** argv) {
     gpt_params params;
 
@@ -213,11 +212,12 @@ int main(int argc, char ** argv) {
             fflush(stdout);
 
             // prepare the next batch
-            // llama_batch_clear(batch);
+            llama_batch_clear(batch);
 
             // push this new token for next evaluation
             llama_batch_add(batch, new_token_id, n_cur, { 0 }, true);
-
+            llama_kv_update(ctx_sm, batch);
+            llama_kv_update(ctx_lg, batch);
             n_decode += 1;
         }
 

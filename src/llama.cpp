@@ -14480,6 +14480,10 @@ static void llama_graph_compute(
     // fprintf(stderr, "splits: %d\n", ggml_backend_sched_get_n_splits(lctx.sched));
 }
 
+int llama_kv_update(llama_context * lctx, llama_batch batch) {
+    return llama_kv_cache_find_slot(lctx->kv_self, batch);
+}
+
 // decode a batch of tokens by evaluating the transformer
 //
 //   - lctx:      llama context
