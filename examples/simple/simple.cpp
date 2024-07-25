@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <cassert>
 #include <iostream>
 
 static void print_usage(int argc, char ** argv, const gpt_params & params) {
@@ -18,6 +19,68 @@ static void print_usage(int argc, char ** argv, const gpt_params & params) {
     LOG_TEE("\n");
 }
 
+llama_token_data_array get_logits(llama_model * model, llama_context * ctx, llama_batch batch) {
+    for (int i = 0; i < batch.n_tokens - 1; i++) batch.logits[i] = false;
+    batch.logits[batch.n_tokens - 1] = true;
+    llama_decode(ctx, batch); 
+    // printf("\nbatch n_tokens: %d\n", batch.n_tokens);
+    auto   n_vocab = llama_n_vocab(model);
+    auto * logits  = llama_get_logits_ith(ctx, batch.n_tokens - 1);
+
+    std::vector<llama_token_data> candidates;
+    candidates.reserve(n_vocab);
+
+    for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
+        candidates.emplace_back(llama_token_data{ token_id, logits[token_id], 0.0f });
+    }
+
+    llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
+    return candidates_p;
+}
+float get_uncertainty(llama_token_data_array candidates_p) {
+    float sum_exp = 0, max_logit = -INFINITY;
+    for (int i = 0; i < candidates_p.size; i++) {
+        sum_exp += exp(candidates_p.data[i].logit);
+        max_logit = std::max(max_logit, candidates_p.data[i].logit);
+    }
+    float uncertainty = log(sum_exp) - max_logit;
+    return uncertainty;
+}
+//creates models (hence the name)
+std::pair<llama_model *, llama_context *> create_model(const char * file, gpt_params params) {
+    llama_model_params model_params = llama_model_params_from_gpt_params(params);
+    llama_model * model = llama_load_model_from_file(file, model_params);
+    assert(model);
+    llama_context_params ctx_params = llama_context_params_from_gpt_params(params);
+    llama_context * ctx = llama_new_context_with_model(model, ctx_params);
+    assert(ctx);
+    return {model, ctx};
+}
+
+// i forgot the type
+/*
+Mp denotes the accurate LLM, Me denotes the efficient SLM, input1..k denotes the user request prompts, T denotes the output
+length, and T hresholdc denotes the adaptive threshold to balance output quality and throughput. We
+also provide the vanilla sampling method of Auto-Regressive Sampling in Alg. 1 for comparison.
+
+
+Input: M_p(.|.), M_e(.|.), input_1..k , T ,Threshold_c
+
+Initialize n ← t
+
+for i = 1 to T do
+    Q_i ← M_e(x|input + {x_1, ..., x_i−1})
+    C_i ← Conf idence(Q_i)
+    if C_i > Threshold_c then
+        Sample x_i ∼ Q_i
+    else
+        P_i ← M_p(x|input + {x_1, ..., x_i−1})
+        Sample x_i ∼ P_i
+    end if
+end for
+
+return x_1, ..., x_T
+*/
 int main(int argc, char ** argv) {
     gpt_params params;
 
@@ -39,33 +102,17 @@ int main(int argc, char ** argv) {
     llama_numa_init(params.numa);
 
     // initialize the model
-
-    llama_model_params model_params = llama_model_params_from_gpt_params(params);
-
-    llama_model * model = llama_load_model_from_file("llama-2-7b.Q8_0.gguf", model_params);
-
-    if (model == NULL) {
-        fprintf(stderr , "%s: error: unable to load model\n" , __func__);
-        return 1;
-    }
-
-    // initialize the context
-
-    llama_context_params ctx_params = llama_context_params_from_gpt_params(params);
-
-    llama_context * ctx = llama_new_context_with_model(model, ctx_params);
-
-    if (ctx == NULL) {
-        fprintf(stderr , "%s: error: failed to create the llama_context\n" , __func__);
-        return 1;
-    }
+    auto [model_sm, ctx_sm] = create_model("llama-2-7b.Q8_0.gguf", params);
+    auto [model_lg, ctx_lg] = create_model("llama-2-13b.Q8_0.gguf", params);
+    printf("llama 7b token count: %d\n", llama_n_vocab(model_sm));
+    printf("llama 13b token count: %d\n", llama_n_vocab(model_lg));
 
     // tokenize the prompt
 
     std::vector<llama_token> tokens_list;
-    tokens_list = ::llama_tokenize(ctx, params.prompt, true);
+    tokens_list = ::llama_tokenize(ctx_sm, params.prompt, true);
 
-    const int n_ctx    = llama_n_ctx(ctx);
+    const int n_ctx    = llama_n_ctx(ctx_sm);
     const int n_kv_req = tokens_list.size() + (n_predict - tokens_list.size());
 
     LOG_TEE("\n%s: n_predict = %d, n_ctx = %d, n_kv_req = %d\n", __func__, n_predict, n_ctx, n_kv_req);
@@ -82,7 +129,8 @@ int main(int argc, char ** argv) {
     fprintf(stderr, "\n");
 
     for (auto id : tokens_list) {
-        fprintf(stderr, "%s", llama_token_to_piece(ctx, id).c_str());
+        fprintf(stderr, "%s", llama_token_to_piece(ctx_sm, id).c_str());
+        // assert(llama_token_to_piece(ctx_sm, id) == llama_token_to_piece(ctx_lg, id));
     }
 
     fflush(stderr);
@@ -98,12 +146,11 @@ int main(int argc, char ** argv) {
     }
 
     // llama_decode will output logits only for the last token of the prompt
-    batch.logits[batch.n_tokens - 1] = true;
 
-    if (llama_decode(ctx, batch) != 0) {
-        LOG_TEE("%s: llama_decode() failed\n", __func__);
-        return 1;
-    }
+    // if (llama_decode(ctx_sm, batch) != 0) {
+    //     LOG_TEE("%s: llama_decode() failed\n", __func__);
+    //     return 1;
+    // }
 
     // main loop
 
@@ -111,40 +158,42 @@ int main(int argc, char ** argv) {
     int n_decode = 0;
 
     const auto t_main_start = ggml_time_us();
-
-    while (n_cur <= n_predict) {
+    printf("%d %d\n", n_cur, n_predict);
+    // stuff happens here
+    while (n_cur < n_predict) {
+        // printf("\n%d\n", batch.n_tokens);
         // sample the next token
         {
-            auto   n_vocab = llama_n_vocab(model);
-            auto * logits  = llama_get_logits_ith(ctx, batch.n_tokens - 1);
+            // auto   n_vocab = llama_n_vocab(model_sm);
+            // auto * logits  = llama_get_logits_ith(ctx_sm, batch.n_tokens - 1);
 
-            std::vector<llama_token_data> candidates;
-            candidates.reserve(n_vocab);
+            // std::vector<llama_token_data> candidates;
+            // candidates.reserve(n_vocab);
 
-            for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
-                candidates.emplace_back(llama_token_data{ token_id, logits[token_id], 0.0f });
-            }
+            // for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
+            //     candidates.emplace_back(llama_token_data{ token_id, logits[token_id], 0.0f });
+            // }
 
-            llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
+            // llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
+            llama_context * ctx = ctx_sm;
+            auto candidates_p = get_logits(model_sm, ctx_sm, batch);
             
             // double max_p = INFINITY;
             // if (n_cur == n_predict) printf("finished printing logits\n");
             // softmax: probability = e^logit / sum(e^logit)
             // nll: -ln(probability)
             // nll(softmax(logit)) = ln(sum(e^logit)) - logit
-            // uncertaintly = maximum nll
+            // uncertaintly = minimum nll
             // probability = 1 means that nll = 0, hence why high uncertainty is bad 
             // calculate uncertainty 
-            float sum_exp = 0, min_logit = INFINITY;
-            for (int i = 0; i < candidates_p.size; i++) {
-                // max_p = std::min(max_p, -log2(candidates_p.data[i].p));
-                sum_exp += exp(candidates_p.data[i].logit);
-                min_logit = std::min(min_logit, candidates_p.data[i].logit);
-            }
+            float uncertainty = get_uncertainty(candidates_p);
+            // printf("\nuncertainty: %f\n", uncertainty);
 
-            float uncertainty = log(sum_exp) - min_logit;
-            printf("\nuncertainty: %f\n", uncertainty);
-            
+            if (uncertainty > 1.0) {
+                LOG_TEE(" *");
+                candidates_p = get_logits(model_lg, ctx_lg, batch);
+                ctx = ctx_lg;
+            }
             
             // sample the most likely token
             const llama_token new_token_id = llama_sample_token_greedy(ctx, &candidates_p);
@@ -154,17 +203,17 @@ int main(int argc, char ** argv) {
             // Confidence(Pi) = NLL(t1)
             
             // is it an end of generation?
-            if (llama_token_is_eog(model, new_token_id) || n_cur == n_predict) {
+            if (llama_token_is_eog(model_sm, new_token_id) || n_cur == n_predict) {
                 LOG_TEE("\n");
 
                 break;
             }
-
-            LOG_TEE("%s", llama_token_to_piece(ctx, new_token_id).c_str());
+            assert(llama_token_to_piece(ctx_sm, new_token_id) == llama_token_to_piece(ctx_lg, new_token_id));
+            LOG_TEE("|%s|", llama_token_to_piece(ctx, new_token_id).c_str());
             fflush(stdout);
 
             // prepare the next batch
-            llama_batch_clear(batch);
+            // llama_batch_clear(batch);
 
             // push this new token for next evaluation
             llama_batch_add(batch, new_token_id, n_cur, { 0 }, true);
@@ -173,12 +222,6 @@ int main(int argc, char ** argv) {
         }
 
         n_cur += 1;
-
-        // evaluate the current batch with the transformer model
-        if (llama_decode(ctx, batch)) {
-            fprintf(stderr, "%s : failed to eval, return code %d\n", __func__, 1);
-            return 1;
-        }
     }
 
     LOG_TEE("\n");
@@ -187,54 +230,33 @@ int main(int argc, char ** argv) {
 
     LOG_TEE("%s: decoded %d tokens in %.2f s, speed: %.2f t/s\n",
             __func__, n_decode, (t_main_end - t_main_start) / 1000000.0f, n_decode / ((t_main_end - t_main_start) / 1000000.0f));
-    LOG_TEE("%ld # of times kqv was called\n", kqv_calls);
-    LOG_TEE("%ld decode time\n", decode_time);
-    LOG_TEE("%ld compute time\n", compute_time);
-    LOG_TEE("%ld matmul time\n", mm_time);
-    LOG_TEE("%ld microseconds time spent building kqv\n", kqv_time);
-    LOG_TEE("%ld microseconds spent on ffn\n", ffn_time);
     // for (int i = 0; i < 75; i++) printf("%d: %ld\n", i, t[i]);
-    std::map<std::string, int64_t> rt;
     int64_t tot = 0;
     double kqv = 0;
-    printf("%ld\n", sz);
-    for (int i = 0; i < 20; i++) printf("%s\n", s[i]);
     int c = 0;
-    for (int i = 0; i < sz; i++) if (s[i]) {
-        std::string S(s[i]);
-        rt[S.substr(0, S.find("-"))] += r[i] - l[i];
+    // for (int i = 0; i < sz; i++) if (s[i]) {
+    //     std::string S(s[i]);
+    //     rt[S.substr(0, S.find("-"))] += r[i] - l[i];
 
-        if (S.substr(0, S.find("-")) == "Kcur") {
-            kqv += r[i] - l[i];
-            ++c;
-        }
-        tot += r[i] - l[i];
-    }
-    printf("%d repetitive k_cur computation of key avoided\n", tot_tokens);
-    printf("%f average time spent on Kcur\n", kqv / c);
-    printf("%d total k_cur computations\n", c); 
+    //     if (S.substr(0, S.find("-")) == "Kcur") {
+    //         kqv += r[i] - l[i];
+    //         ++c;
+    //     }
+    //     tot += r[i] - l[i];
+    // }
+    // printf("%d repetitive k_cur computation of key avoided\n", tot_tokens);
+    // printf("%f average time spent on Kcur\n", kqv / c);
+    // printf("%d total k_cur computations\n", c); 
     std::vector<std::pair<std::string, int64_t>> v;
-    for (auto p : rt) {
-        // std::cout << p.first << ": " << p.second << std::endl;
-        v.push_back(p);
-    }
-    sort(v.begin(), v.end(), [](std::pair<std::string, int64_t> a, std::pair<std::string, int64_t> b) {
-        return a.second > b.second;
-    });
-    for (auto p : v) {
-        std::cout << p.first << ": " << p.second << std::endl;
-    }
-    printf("%ld total time\n", tot);
-    printf("%f total time without kv_cache\n", tot + kqv / c * tot_tokens);
 
-    llama_print_timings(ctx);
+    llama_print_timings(ctx_sm);
 
     fprintf(stderr, "\n");
 
     llama_batch_free(batch);
 
-    llama_free(ctx);
-    llama_free_model(model);
+    llama_free(ctx_sm);
+    llama_free_model(model_sm);
 
     llama_backend_free();
 
